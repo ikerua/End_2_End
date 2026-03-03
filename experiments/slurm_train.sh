@@ -51,7 +51,7 @@ srun python -m experiments.train \
     --data_dir_clean ./data/clean \
     --data_dir_noisy ./data/noisy \
     --use_clean_data \
-    --batch_size 16 \
+    --batch_size 32 \
     --learning_rate 1e-5 \
     --weight_decay 0.01 \
     --warmup_steps 500 \
