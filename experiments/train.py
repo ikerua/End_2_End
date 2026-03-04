@@ -14,8 +14,8 @@ from pytorch_lightning.callbacks import ModelCheckpoint, EarlyStopping, Learning
 from pytorch_lightning.loggers import CSVLogger
 from pytorch_lightning.strategies import DDPStrategy
 
-from lib.teacher_model.model import WhisperLightning
-from lib.teacher_model.data import WhisperDataModule
+from src.teacher_model.model import WhisperLightning
+from src.teacher_model.data import WhisperDataModule
 
 # 1. BLOQUEO OFFLINE (VITAL PARA EL BSC)
 os.environ["HF_DATASETS_OFFLINE"] = "1"
