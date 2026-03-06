@@ -6,155 +6,124 @@ the dataset.
 
 __docformat__ = "numpy"
 
+import os
 import torch
+import numpy as np
 import pytorch_lightning as pl
-from torch.utils.data import Dataset, DataLoader
-import torchaudio
-from transformers import WhisperProcessor
+import soundfile as sf
+import io
+import librosa
 from dataclasses import dataclass
 from typing import Any, Dict, List, Union
 
-class EuskeraTranscriptorDataset(Dataset):
-    def __init__(self, use_clean_data: bool, data_dir_clean, data_dir_noisy, processor: WhisperProcessor):
-        self.use_clean_data = use_clean_data
-        self.data_dir_clean = data_dir_clean
-        self.data_dir_noisy = data_dir_noisy
+from datasets import load_from_disk, Audio
+from torch.utils.data import DataLoader
 
-        self.data_dir = ""
-        self.processor = processor
-        self.audio_paths = []
-        self.transcriptions = []
-        self._load_data()
-    
-    def _load_data(self):
-        if self.use_clean_data:
-            self.data_dir = self.data_dir_clean
-        else:
-            self.data_dir = self.data_dir_noisy
-        
-        import os
-        import csv
-        import glob
-        
-        # Buscar el archivo .tsv en el directorio
-        tsv_files = glob.glob(os.path.join(self.data_dir, "*.tsv"))
-        if not tsv_files:
-            raise FileNotFoundError(f"No se encontró un archivo .tsv en {self.data_dir}")
-        
-        tsv_path = tsv_files[0]
-        print(f"Leyendo dataset desde: {tsv_path}")
-        
-        with open(tsv_path, 'r', encoding='utf-8') as f:
-            reader = csv.reader(f, delimiter='\t')
-            for i, row in enumerate(reader):
-                if len(row) < 2: continue
-                
-                # Saltar cabecera si la primera fila parece serlo
-                if i == 0 and ("file" in row[0].lower() or "name" in row[0].lower() or "path" in row[0].lower()):
-                    continue
-                
-                audio_filename = row[0]
-                transcription = row[1]
-                
-                # Construir la ruta completa al archivo de audio
-                full_audio_path = os.path.join(self.data_dir, audio_filename)
-                
-                self.audio_paths.append(full_audio_path)
-                self.transcriptions.append(transcription)
-        
-    
-    def __len__(self):
-        return len(self.audio_paths)
-    
-    def __getitem__(self, idx):
-        # 1. Load audio
-        audio, sample_rate = torchaudio.load(self.audio_paths[idx])
-        
-        # Whisper expects audios always at 16kHz (16000 Hz)
-        if sample_rate != 16000:
-            resampler = torchaudio.transforms.Resample(orig_freq=sample_rate, new_freq=16000)
-            audio = resampler(audio)
-            
-        # torchaudio loads with shape (Channels, Time). Whisper processes a single channel in 1D.
-        audio = audio.squeeze(0).numpy()
-        
-        # 2. Get text
-        transcription = self.transcriptions[idx]
-        
-        # 3. Convert audio to Mel spectrogram, and text to token IDs
-        input_features = self.processor.feature_extractor(audio, sampling_rate=16000).input_features[0]
-        labels = self.processor.tokenizer(transcription).input_ids
-        
-        return {
-            "input_features": input_features, # Mel spectrograms
-            "labels": labels                  # Word tokens
-        }
-
-
+from transformers import WhisperProcessor
+# ==========================================
+# DATA COLLATOR (FIX 128 BANDS + DEBUG)
+# ==========================================
 @dataclass
 class DataCollatorSpeechSeq2SeqWithPadding:
-    """
-    This Data Collator will process the list of dictionaries that __getitem__ returns.
-    It will intelligently pad the audios on one side and the texts on the other, 
-    adjusting their padding to generate blocks of the same size.
-    """
     processor: Any
 
     def __call__(self, features: List[Dict[str, Union[List[int], torch.Tensor]]]) -> Dict[str, torch.Tensor]:
-        # Separate inputs (audio) and labels (text) as they have different sizes and padding methods
-        input_features = [{"input_features": feature["input_features"]} for feature in features]
-        label_features = [{"input_ids": feature["labels"]} for feature in features]
+        input_features = []
+        valid_sentences = []
+        num_vacios = 0
 
-        # Send to the processor to equalize the sizes in the audio block ("input_features")
+        for idx, feature in enumerate(features):
+            audio_data = feature["audio"]
+            sentence = feature.get("sentence", "")
+            
+            try:
+                # 1. Texto vacio
+                if not sentence or len(sentence.strip()) == 0:
+                    raise ValueError("Texto completamente vacio")
+
+                # 2. Leer audio
+                if "bytes" in audio_data and audio_data["bytes"] is not None:
+                    audio_array, sampling_rate = sf.read(io.BytesIO(audio_data["bytes"]))
+                else:
+                    audio_array, sampling_rate = sf.read(audio_data["path"])
+                
+                # 3. Forzar Mono
+                if len(audio_array.shape) > 1:
+                    audio_array = librosa.to_mono(audio_array.T)
+
+                # 4. Longitud minima
+                if len(audio_array) < 1600:
+                    raise ValueError(f"Audio demasiado corto ({len(audio_array)} muestras)")
+
+                # 5. Valores corruptos
+                if np.isnan(audio_array).any() or np.isinf(audio_array).any():
+                    raise ValueError("NaN/Infinito detectado en el audio original")
+
+                # 6. Remuestreo a 16KHz
+                if sampling_rate != 16000:
+                    audio_array = librosa.resample(y=audio_array.T, orig_sr=sampling_rate, target_sr=16000).T
+                    sampling_rate = 16000
+
+                # 7. Extraccion
+                extracted = self.processor.feature_extractor(
+                    audio_array, sampling_rate=sampling_rate
+                ).input_features[0]
+                
+                if np.isnan(extracted).any() or np.isinf(extracted).any():
+                    raise ValueError("NaN tras extraccion del espectrograma")
+
+            except Exception as e:
+                # DEBUG PRINT: Solo logueamos si hay error
+                print(f" [DataCollator] ERROR en audio {idx}: {e}. Sustituyendo por dummy 128-Mel.")
+                num_vacios += 1
+                # FIX CRITICO 1: 128 MEL BANDS PARA WHISPER V3 (No 80)
+                extracted = np.zeros((128, 3000), dtype=np.float32) 
+                sentence = "Audio akatsa" 
+
+            input_features.append({"input_features": extracted})
+            valid_sentences.append(sentence)
+
         batch = self.processor.feature_extractor.pad(input_features, return_tensors="pt")
 
-        # Equalize the size of the texts by adding padding ("labels")
-        labels_batch = self.processor.tokenizer.pad(label_features, return_tensors="pt")
+        # Tokenizacion con guillotina para evitar OutOfBounds
+        labels_batch = self.processor.tokenizer(
+            valid_sentences, 
+            padding="longest",
+            truncation=True, 
+            max_length=448,
+            return_tensors="pt"
+        )
 
-        # Important: Replace the text padding from 0 to -100 
-        # so that PyTorch loss ignores it and does not penalize the padding
         labels = labels_batch["input_ids"].masked_fill(labels_batch.attention_mask.ne(1), -100)
 
+        if (labels[:, 0] == self.processor.tokenizer.bos_token_id).all().cpu().item():
+            labels = labels[:, 1:]
+
         batch["labels"] = labels
+        batch["num_errores"] = num_vacios 
         return batch
 
-
-class EuskeraTranscriptorDataModule(pl.LightningDataModule):
-    def __init__(self, data_dir, model_name_or_path, batch_size=8, num_workers=4):
+# ==========================================
+# DATAMODULE 
+# ==========================================
+class WhisperDataModule(pl.LightningDataModule):
+    def __init__(self, data_dir, model_path, batch_size=8, num_workers=8):
         super().__init__()
         self.data_dir = data_dir
+        self.model_path = model_path
         self.batch_size = batch_size
         self.num_workers = num_workers
-        self.model_name_or_path = model_name_or_path
-        
-        # Initialize the official processor
-        self.processor = WhisperProcessor.from_pretrained(
-            self.model_name_or_path, 
-            task="transcribe", 
-            # language="basque" # <- You can enable this if you are only going to use Basque
-        )
-        
-        # Here we define the dynamic way in which the batches will be grouped
-        self.collate_fn = DataCollatorSpeechSeq2SeqWithPadding(processor=self.processor)
 
     def setup(self, stage=None):
-        if stage == 'fit' or stage is None:
-            self.train_dataset = EuskeraTranscriptorDataset(self.data_dir, processor=self.processor)
-            self.val_dataset = EuskeraTranscriptorDataset(self.data_dir, processor=self.processor)
-    
+        self.processor = WhisperProcessor.from_pretrained(self.model_path, local_files_only=True)
+        self.processor.tokenizer.set_prefix_tokens(language="basque", task="transcribe")
+        self.dataset = load_from_disk(self.data_dir).with_format("torch").cast_column("audio", Audio(decode=False))
+        print(" [SETUP] Dataset cargado en memoria correctamente.")
+
     def train_dataloader(self):
-        return DataLoader(
-            self.train_dataset, 
-            batch_size=self.batch_size, 
-            shuffle=True, 
-            collate_fn=self.collate_fn, #   Apply collation in each batch
-            num_workers=self.num_workers
-        )
-    
+        collator = DataCollatorSpeechSeq2SeqWithPadding(processor=self.processor)
+        return DataLoader(self.dataset["train"], batch_size=self.batch_size, shuffle=True, collate_fn=collator, num_workers=self.num_workers, pin_memory=True)
+
     def val_dataloader(self):
-        return DataLoader(
-            self.val_dataset, 
-            batch_size=self.batch_size, 
-            collate_fn=self.collate_fn,
-            num_workers=self.num_workers
-        )
+        collator = DataCollatorSpeechSeq2SeqWithPadding(processor=self.processor)
+        return DataLoader(self.dataset["validation"], batch_size=self.batch_size, shuffle=False, collate_fn=collator, num_workers=self.num_workers, pin_memory=True)
