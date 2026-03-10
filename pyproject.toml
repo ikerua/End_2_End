@@ -17,4 +17,10 @@ dependencies = [
     "transformers>=5.2.0",
     "datasets>=4.5.0",
     "tqdm>=4.67.3",
+    "jiwer>=4.0.0",
+    "pytorch-lightning>=2.6.1",
+    "gradio>=6.9.0",
+    "torchaudio>=2.10.0",
+    "hf>=1.6.0",
+    "ffmpeg>=1.4",
 ]

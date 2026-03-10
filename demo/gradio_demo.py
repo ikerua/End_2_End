@@ -10,7 +10,7 @@ print("="*60)
 transcriptor = pipeline(
     "automatic-speech-recognition",
     model="openai/whisper-base",
-    device="cpu"
+    device="gpu"
 )
 print("✅ Modelo cargado!\n")
 

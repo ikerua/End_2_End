@@ -181,3 +181,4 @@ cython_debug/
 .cursorindexingignore
 checkpoints/
 scripts/
+modelo_exportado_hf/
