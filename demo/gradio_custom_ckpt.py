@@ -32,7 +32,7 @@ print("✅ Modelo cargado!\n")
 
 historial = []
 
-def transcribir(audio, progress=gr.Progress()):
+def transcribir(audio, use_chunking=False, chunk_len=15, progress=gr.Progress()):
     """Transcribe audio con barra de progreso utilizando el modelo custom"""
     
     if audio is None:
@@ -59,10 +59,17 @@ def transcribir(audio, progress=gr.Progress()):
         
         progress(0.5, desc="🎙️ Transcribiendo con Checkpoint Entrenado...")
         
+        kwargs = {
+            "return_timestamps": True,
+            "generate_kwargs": {"language": "basque", "task": "transcribe"}
+        }
+        
+        if use_chunking:
+            kwargs["chunk_length_s"] = chunk_len
+        
         resultado = transcriptor(
             {"sampling_rate": sample_rate, "raw": data},
-            return_timestamps=True,
-            generate_kwargs={"language": "basque", "task": "transcribe"}
+            **kwargs
         )
         
         texto = resultado.get("text", "").strip()
@@ -100,6 +107,15 @@ with gr.Blocks(theme=gr.themes.Soft()) as demo:
                 label="🎙️ Grabadora o Sube tu Audio"
             )
             
+            with gr.Group():
+                use_chunking = gr.Checkbox(label="🧩 Procesar en cachos cortos (Anti-Alucinaciones)", value=False, info="Divide el audio para evitar repeticiones en silencios largos")
+                chunk_len = gr.Slider(minimum=2, maximum=30, value=15, step=1, label="Segundos por cacho", visible=False)
+                
+                def toggle_slider(chk):
+                    return gr.update(visible=chk)
+                
+                use_chunking.change(fn=toggle_slider, inputs=use_chunking, outputs=chunk_len)
+            
             with gr.Row():
                 btn_transcribir = gr.Button("🚀 Transcribir", variant="primary")
                 btn_limpiar = gr.Button("🗑️ Limpiar")
@@ -122,7 +138,7 @@ with gr.Blocks(theme=gr.themes.Soft()) as demo:
     # Eventos
     btn_transcribir.click(
         fn=transcribir,
-        inputs=audio_input,
+        inputs=[audio_input, use_chunking, chunk_len],
         outputs=output
     )
     
