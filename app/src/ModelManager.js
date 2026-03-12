@@ -2,8 +2,8 @@ import RNFS from 'react-native-fs';
 
 // Para usar el modelo "base" por ejemplo:
 const MODEL_URL =
-    'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin';
-const MODEL_FILENAME = 'ggml-base.bin';
+    'https://huggingface.co/ikerua/whisper-base-eus/resolve/main/ggml-model.bin';
+const MODEL_FILENAME = 'ggml-base-eus.bin';
 
 /**
  * Get the local path where the model is/will be stored.
