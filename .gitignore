@@ -187,3 +187,5 @@ modelo_exportado_hf/
 *.safetensors
 *.npz
 *app_mobile/
+whisper/
+whisper.cpp/
