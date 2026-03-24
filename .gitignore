@@ -186,3 +186,4 @@ modelo_exportado_hf/
 *.bin
 *.safetensors
 *.npz
+*app_mobile/

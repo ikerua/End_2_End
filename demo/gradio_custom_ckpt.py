@@ -12,7 +12,7 @@ print("="*60)
 import os
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-MODEL_PATH = os.path.join(BASE_DIR, "modelo_exportado_hf")
+MODEL_PATH = os.path.join(BASE_DIR, "modelo_base_hf")
 
 if not os.path.exists(MODEL_PATH):
     print(f"❌ ADVERTENCIA: No se encuentra la ruta {MODEL_PATH}")

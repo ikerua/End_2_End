@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="eu">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Whisper Eus — Transkripzioa</title>
+  <meta name="description" content="Euskarazko ahots-ezagutzarako sistema, Whisper eredua erabiliz. Local AI transcription in Basque." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <!-- Header -->
+  <header class="header">
+    <div class="header-inner">
+      <div class="brand">
+        <div class="brand-icon">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/>
+            <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+            <line x1="12" x2="12" y1="19" y2="22"/>
+          </svg>
+        </div>
+        <div>
+          <h1 class="brand-name">Whisper <span class="brand-eus">Eus</span></h1>
+          <p class="brand-sub">Euskarazko Transkripzioa</p>
+        </div>
+      </div>
+      <div id="status-badge" class="status-badge status-loading">
+        <span class="status-dot"></span>
+        <span id="status-label">Kargatzen...</span>
+        <span id="status-device" class="status-device"></span>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main -->
+  <main class="main-layout">
+
+    <!-- Left: Controls -->
+    <section class="panel controls-panel">
+      <div class="panel-header">
+        <h2>Sarrera</h2>
+      </div>
+
+      <!-- Record button area -->
+      <div class="record-area">
+        <div class="waveform-container" id="waveform-container">
+          <canvas id="waveform-canvas"></canvas>
+        </div>
+        <div class="record-btn-wrapper">
+          <div class="pulse-ring" id="pulse-ring"></div>
+          <button id="btn-record" class="btn-record" disabled title="Grabatu">
+            <span class="btn-record-icon" id="record-icon">
+              <!-- Mic icon -->
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/>
+                <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+                <line x1="12" x2="12" y1="19" y2="22"/>
+              </svg>
+            </span>
+          </button>
+        </div>
+        <p class="record-hint" id="record-hint">Eredua kargatzen ari da...</p>
+      </div>
+
+      <!-- Divider -->
+      <div class="divider">
+        <span>edo</span>
+      </div>
+
+      <!-- File upload -->
+      <div class="upload-area" id="upload-area">
+        <input type="file" id="file-input" accept="audio/*" hidden />
+        <button id="btn-upload" class="btn-secondary" disabled id="btn-upload">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+            <polyline points="17 8 12 3 7 8"/>
+            <line x1="12" x2="12" y1="3" y2="15"/>
+          </svg>
+          Audio fitxategia kargatu
+        </button>
+        <p id="file-name" class="file-name"></p>
+      </div>
+
+      <!-- Anti-hallucination controls -->
+      <div class="section-title">Aukerak</div>
+      <div class="options-card">
+        <label class="toggle-row" id="chunking-label">
+          <div class="toggle-info">
+            <span class="toggle-name">Zatika prozesatu</span>
+            <span class="toggle-desc">Anti-aluzinaziorako audioa zatietan prozesatu</span>
+          </div>
+          <div class="toggle-switch">
+            <input type="checkbox" id="chk-chunking" />
+            <span class="toggle-slider"></span>
+          </div>
+        </label>
+
+        <div id="chunk-slider-container" class="chunk-slider-container hidden">
+          <div class="slider-header">
+            <span>Zatiaren iraupena</span>
+            <span class="mono" id="chunk-val">15s</span>
+          </div>
+          <input type="range" id="chunk-slider" class="slider" min="2" max="30" value="15" step="1" />
+          <div class="slider-labels"><span>2s</span><span>30s</span></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Right: Transcript output -->
+    <section class="panel output-panel">
+      <div class="panel-header">
+        <h2>Transkripzioa</h2>
+        <div class="panel-actions">
+          <button id="btn-copy" class="btn-icon" title="Kopiatu" disabled>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect width="14" height="14" x="8" y="8" rx="2" ry="2"/>
+              <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/>
+            </svg>
+          </button>
+          <button id="btn-clear" class="btn-icon" title="Garbitu" disabled>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="3 6 5 6 21 6"/>
+              <path d="m19 6-.867 12.142A2 2 0 0 1 16.138 20H7.862a2 2 0 0 1-1.995-1.858L5 6"/>
+              <path d="M10 11v6"/>
+              <path d="M14 11v6"/>
+              <path d="M9 6V4h6v2"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- Transcript list -->
+      <div class="transcript-scroll" id="transcript-scroll">
+        <div id="transcript-list">
+          <div class="transcript-empty" id="transcript-empty">
+            <div class="empty-icon">
+              <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity="0.3">
+                <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/>
+                <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+                <line x1="12" x2="12" y1="19" y2="22"/>
+              </svg>
+            </div>
+            <p>Transkripziorik ez oraindik.<br/>Grabatu edo audio fitxategi bat kargatu.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Processing indicator -->
+      <div id="processing-bar" class="processing-bar hidden">
+        <div class="processing-inner">
+          <div class="processing-dots">
+            <span></span><span></span><span></span>
+          </div>
+          <span id="processing-label">Prozesatzen...</span>
+        </div>
+      </div>
+
+      <!-- Error banner -->
+      <div id="error-banner" class="error-banner hidden">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="10"/>
+          <line x1="12" x2="12" y1="8" y2="12"/>
+          <line x1="12" x2="12.01" y1="16" y2="16"/>
+        </svg>
+        <span id="error-text"></span>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Footer -->
+  <footer class="footer">
+    <span>Whisper Eus · Lokal exekutatutakoa</span>
+    <span id="footer-device" class="mono"></span>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>

@@ -23,4 +23,5 @@ dependencies = [
     "torchaudio>=2.10.0",
     "hf>=1.6.0",
     "ffmpeg>=1.4",
+    "safetensors>=0.7.0",
 ]
