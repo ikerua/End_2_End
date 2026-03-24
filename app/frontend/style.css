@@ -89,12 +89,8 @@ body::before {
 .brand { display: flex; align-items: center; gap: 12px; }
 
 .brand-icon {
-  width: 40px; height: 40px;
-  border-radius: var(--radius-md);
-  background: var(--accent-ultra);
-  border: 1px solid var(--border-active);
+  width: 42px; height: 42px;
   display: flex; align-items: center; justify-content: center;
-  color: var(--accent-light);
   flex-shrink: 0;
 }
 
