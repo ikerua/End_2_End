@@ -18,6 +18,11 @@ from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from transformers import pipeline
+try:
+    from backend.server_realtime import realtime_router
+except ModuleNotFoundError:
+    from server_realtime import realtime_router  # type: ignore
+
 
 # ── Configuration ──────────────────────────────────────────────────────────────
 BASE_DIR = Path(__file__).parent.parent
@@ -74,6 +79,7 @@ async def lifespan(app: FastAPI):
 
 # ── App ────────────────────────────────────────────────────────────────────────
 app = FastAPI(title="Whisper Eus", version="1.0.0", lifespan=lifespan)
+app.include_router(realtime_router)
 
 
 def load_audio_as_float32(audio_bytes: bytes) -> tuple[np.ndarray, int]:

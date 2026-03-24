@@ -13,6 +13,7 @@
     href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
     rel="stylesheet" />
   <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="realtime.css" />
 </head>
 
 <body>
@@ -47,71 +48,139 @@
         <h2>Sarrera</h2>
       </div>
 
-      <!-- Record button area -->
-      <div class="record-area">
-        <div class="waveform-container" id="waveform-container">
-          <canvas id="waveform-canvas"></canvas>
-        </div>
-        <div class="record-btn-wrapper">
-          <div class="pulse-ring" id="pulse-ring"></div>
-          <button id="btn-record" class="btn-record" disabled title="Grabatu">
-            <span class="btn-record-icon" id="record-icon">
-              <!-- Mic icon -->
-              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                stroke-linecap="round" stroke-linejoin="round">
-                <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z" />
-                <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
-                <line x1="12" x2="12" y1="19" y2="22" />
-              </svg>
-            </span>
-          </button>
-        </div>
-        <p class="record-hint" id="record-hint">Eredua kargatzen ari da...</p>
-      </div>
-
-      <!-- Divider -->
-      <div class="divider">
-        <span>edo</span>
-      </div>
-
-      <!-- File upload -->
-      <div class="upload-area" id="upload-area">
-        <input type="file" id="file-input" accept="audio/*" hidden />
-        <button id="btn-upload" class="btn-secondary" disabled id="btn-upload">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+      <!-- Mode tab switcher -->
+      <div class="mode-tabs">
+        <button id="tab-record" class="tab-btn active">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
             stroke-linecap="round" stroke-linejoin="round">
-            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-            <polyline points="17 8 12 3 7 8" />
-            <line x1="12" x2="12" y1="3" y2="15" />
+            <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z" />
+            <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+            <line x1="12" x2="12" y1="19" y2="22" />
           </svg>
-          Audio fitxategia kargatu
+          Grabatu
         </button>
-        <p id="file-name" class="file-name"></p>
+        <button id="tab-realtime" class="tab-btn realtime-tab">
+          <span class="tab-dot"></span>
+          Zuzenean
+        </button>
       </div>
 
-      <!-- Anti-hallucination controls -->
-      <div class="section-title">Aukerak</div>
-      <div class="options-card">
-        <label class="toggle-row" id="chunking-label">
-          <div class="toggle-info">
-            <span class="toggle-name">Zatika prozesatu</span>
-            <span class="toggle-desc">Anti-aluzinaziorako audioa zatietan prozesatu</span>
-          </div>
-          <div class="toggle-switch">
-            <input type="checkbox" id="chk-chunking" />
-            <span class="toggle-slider"></span>
-          </div>
-        </label>
+      <!-- ── Panel: Record & Upload (existing) ── -->
+      <div id="panel-record" class="tab-panel active">
 
-        <div id="chunk-slider-container" class="chunk-slider-container hidden">
-          <div class="slider-header">
-            <span>Zatiaren iraupena</span>
-            <span class="mono" id="chunk-val">15s</span>
+        <!-- Record button area -->
+        <div class="record-area">
+          <div class="waveform-container" id="waveform-container">
+            <canvas id="waveform-canvas"></canvas>
           </div>
-          <input type="range" id="chunk-slider" class="slider" min="2" max="30" value="15" step="1" />
-          <div class="slider-labels"><span>2s</span><span>30s</span></div>
+          <div class="record-btn-wrapper">
+            <div class="pulse-ring" id="pulse-ring"></div>
+            <button id="btn-record" class="btn-record" disabled title="Grabatu">
+              <span class="btn-record-icon" id="record-icon">
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                  stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z" />
+                  <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+                  <line x1="12" x2="12" y1="19" y2="22" />
+                </svg>
+              </span>
+            </button>
+          </div>
+          <p class="record-hint" id="record-hint">Eredua kargatzen ari da...</p>
         </div>
-      </div>
+
+        <!-- Divider -->
+        <div class="divider">
+          <span>edo</span>
+        </div>
+
+        <!-- File upload -->
+        <div class="upload-area" id="upload-area">
+          <input type="file" id="file-input" accept="audio/*" hidden />
+          <button id="btn-upload" class="btn-secondary" disabled>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+              stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+              <polyline points="17 8 12 3 7 8" />
+              <line x1="12" x2="12" y1="3" y2="15" />
+            </svg>
+            Audio fitxategia kargatu
+          </button>
+          <p id="file-name" class="file-name"></p>
+        </div>
+
+        <!-- Anti-hallucination controls -->
+        <div class="section-title">Aukerak</div>
+        <div class="options-card">
+          <label class="toggle-row" id="chunking-label">
+            <div class="toggle-info">
+              <span class="toggle-name">Zatika prozesatu</span>
+              <span class="toggle-desc">Anti-aluzinaziorako audioa zatietan prozesatu</span>
+            </div>
+            <div class="toggle-switch">
+              <input type="checkbox" id="chk-chunking" />
+              <span class="toggle-slider"></span>
+            </div>
+          </label>
+          <div id="chunk-slider-container" class="chunk-slider-container hidden">
+            <div class="slider-header">
+              <span>Zatiaren iraupena</span>
+              <span class="mono" id="chunk-val">15s</span>
+            </div>
+            <input type="range" id="chunk-slider" class="slider" min="2" max="30" value="15" step="1" />
+            <div class="slider-labels"><span>2s</span><span>30s</span></div>
+          </div>
+        </div>
+
+      </div><!-- /panel-record -->
+
+      <!-- ── Panel: Real-Time Streaming ── -->
+      <div id="panel-realtime" class="tab-panel">
+
+        <div class="realtime-area">
+
+          <!-- Live waveform -->
+          <div class="realtime-waveform" id="realtime-waveform">
+            <canvas id="realtime-canvas" style="width:100%;height:100%;display:block;"></canvas>
+          </div>
+
+          <!-- Stream button -->
+          <div class="record-btn-wrapper">
+            <div class="pulse-ring" id="realtime-pulse"></div>
+            <button id="btn-stream" class="btn-realtime" disabled title="Zuzenean transkribatu">
+              <!-- Broadcast icon -->
+              <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                stroke-linecap="round" stroke-linejoin="round">
+                <path d="M16.24 7.76a6 6 0 0 1 0 8.49" />
+                <path d="M7.76 7.76a6 6 0 0 0 0 8.49" />
+                <path d="M20.07 4.93a10 10 0 0 1 0 14.14" />
+                <path d="M3.93 4.93a10 10 0 0 0 0 14.14" />
+                <circle cx="12" cy="12" r="2" fill="currentColor" />
+              </svg>
+            </button>
+          </div>
+
+          <!-- Live indicator -->
+          <div class="live-indicator" id="live-indicator">
+            <span class="live-dot" id="live-dot"></span>
+            <span id="live-label">Gelditurik</span>
+          </div>
+
+          <p class="realtime-hint" id="realtime-hint">Sakatu zuzenean transkribatzeko</p>
+
+        </div>
+
+        <!-- Info note -->
+        <div class="section-title">Nola funtzionatzen du</div>
+        <div class="options-card" style="padding: 12px 16px 14px;">
+          <p style="font-size:0.75rem; color:var(--text-muted); line-height:1.6;">
+            Audioa 3 segundoko zatietan bidaltzen da. Transkripzio partzialak denbora errealean agertzen dira.
+            Eredua chunk bakoitza jaso bezain laster prozesatzen du.
+          </p>
+        </div>
+
+      </div><!-- /panel-realtime -->
+
     </section>
 
     <!-- Right: Transcript output -->
@@ -187,6 +256,7 @@
   </footer>
 
   <script src="app.js"></script>
+  <script src="realtime.js"></script>
 </body>
 
 </html>
