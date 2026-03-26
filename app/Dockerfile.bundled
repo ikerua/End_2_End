@@ -31,8 +31,8 @@ COPY app/backend/ ./backend/
 COPY app/frontend/ ./frontend/
 
 # ── Modelo incluido en la imagen ───────────────────────────────────────────────
-# Se copia desde modelo_base_hf/ en la raíz del proyecto
-COPY modelo_base_hf/ ./modelo/
+# Se copia desde models/base_hf/ en la raíz del proyecto
+COPY models/base_hf/ ./modelo/
 
 # Variable de entorno: ruta del modelo dentro del contenedor
 ENV MODEL_PATH=/app/modelo

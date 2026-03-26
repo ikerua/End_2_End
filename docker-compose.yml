@@ -14,7 +14,7 @@
 #  └───────────────────┴──────────┴────────────────────────────────────────────┘
 #
 #  Comparativa slim vs bundled:
-#    slim     → imagen ligera, requiere modelo en ./modelo_base_hf/
+#    slim     → imagen ligera, requiere modelo en ./models/base_hf/
 #    bundled  → autocontenida, no necesita nada en el host
 #
 #  Requisitos GPU: NVIDIA drivers + nvidia-container-toolkit
@@ -36,7 +36,7 @@ services:
     ports:
       - "7860:7860"
     volumes:
-      - ./modelo_base_hf:/app/modelo:ro    # modelo en el host
+      - ./models/base_hf:/app/modelo:ro    # modelo en el host
       - ./app/logs:/app/logs               # logs persistentes
     environment:
       - MODEL_PATH=/app/modelo
@@ -52,7 +52,7 @@ services:
     ports:
       - "7860:7860"
     volumes:
-      - ./modelo_base_hf:/app/modelo:ro
+      - ./models/base_hf:/app/modelo:ro
       - ./app/logs:/app/logs
     environment:
       - MODEL_PATH=/app/modelo

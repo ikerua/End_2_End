@@ -2,20 +2,21 @@
 # Usado cuando el contexto de build es la raíz del proyecto (imágenes bundled).
 # Evita enviar al Docker daemon cosas grandes innecesarias.
 
-# Modelos que NO queremos incluir (solo modelo_base_hf se incluye en bundled)
-modelo_exportado_hf/
-modelo_exportado_hf.zip
+# Modelos que NO queremos incluir (solo models/base_hf se incluye en bundled)
+models/exported_hf/
+models/checkpoints/
 whisper/
 whisper.cpp/
-checkpoints/
 
-# Experimentos, demos y notebooks
-experiments/
+# Entrenamiento, demos y scripts
+training/
 demo/
 scripts/
+src/
 
-# App mobile
-app_mobile/
+# Documentación y archivados
+docs/
+_archive/
 
 # Python cache
 **/__pycache__/
@@ -43,4 +44,4 @@ app/logs/
 # Misc
 *.md
 *.zip
-*.bin          # pesos GGUF — solo queremos los .safetensors
+*.bin
