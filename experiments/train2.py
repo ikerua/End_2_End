@@ -1,7 +1,6 @@
 """
 train.py - Monolithic Training Script for Whisper Large V3 (Basque)
-Adapted for BSC MareNostrum 5 (Offline Mode, Scratch storage, Multi-Node DDP).
-No external local libraries used to prevent import/path errors.
+DEBUG EDITION: Inundado de prints para cazar el "Loss 1.570 congelado"
 """
 
 import os
@@ -33,7 +32,7 @@ os.environ["TRANSFORMERS_OFFLINE"] = "1"
 os.environ["WANDB_DISABLED"] = "true"
 
 # ==========================================
-# DATA COLLATOR
+# DATA COLLATOR (Aadimos prints basicos aqui)
 # ==========================================
 @dataclass
 class DataCollatorSpeechSeq2SeqWithPadding:
@@ -42,55 +41,51 @@ class DataCollatorSpeechSeq2SeqWithPadding:
     def __call__(self, features: List[Dict[str, Union[List[int], torch.Tensor]]]) -> Dict[str, torch.Tensor]:
         input_features = []
         valid_sentences = []
+        
+        # Vamos a ver si el DataCollator esta haciendo algo
+        num_vacios = 0
 
         for feature in features:
             audio_data = feature["audio"]
             sentence = feature.get("sentence", "")
             
             try:
-                # 1. Leer audio
                 if "bytes" in audio_data and audio_data["bytes"] is not None:
                     audio_array, sampling_rate = sf.read(io.BytesIO(audio_data["bytes"]))
                 else:
                     audio_array, sampling_rate = sf.read(audio_data["path"])
-                # 1. FORZAR MONO (CRITICO: Whisper colapsa con audios estereo)
+                
                 if len(audio_array.shape) > 1:
                     audio_array = librosa.to_mono(audio_array.T)
 
-                # 2. Escudo contra audios vacios (0 segundos)
                 if len(audio_array) == 0:
-                    raise ValueError("Audio de longitud 0 detectado")
+                    raise ValueError("Audio vacio")
 
-                # 3. Escudo contra ruido infinito o NaNs de origen
                 if np.isnan(audio_array).any():
-                    raise ValueError("Valores NaN detectados en el array original")
+                    raise ValueError("NaN en array original")
 
-                # 4. Re-muestreo a 16kHz
                 if sampling_rate != 16000:
                     audio_array = librosa.resample(y=audio_array.T, orig_sr=sampling_rate, target_sr=16000).T
                     sampling_rate = 16000
 
-                # 5. Extraccion de caracteristicas
                 extracted = self.processor.feature_extractor(
                     audio_array, sampling_rate=sampling_rate
                 ).input_features[0]
                 
-                # 6. Escudo final post-extraccion
                 if np.isnan(extracted).any():
-                    raise ValueError("Valores NaN tras extraer espectrograma")
+                    raise ValueError("NaN tras extraccion")
 
             except Exception as e:
-                # Si CUALQUIER COSA falla, ponemos un segundo de silencio puro y vaciamos la frase
-                print(f" [WARNING] Audio descartado por error: {e}")
-                extracted = np.zeros((80, 3000), dtype=np.float32) # Espectrograma vacio estandar
-                sentence = "" # No hay frase que aprender de un silencio
+                # No imprimimos cada audio para no saturar, pero los contamos
+                num_vacios += 1
+                extracted = np.zeros((80, 3000), dtype=np.float32) 
+                sentence = "" 
 
             input_features.append({"input_features": extracted})
             valid_sentences.append(sentence)
 
         batch = self.processor.feature_extractor.pad(input_features, return_tensors="pt")
 
-        # Tokenizamos las frases validas
         labels_batch = self.processor.tokenizer(
             valid_sentences, 
             padding="longest",
@@ -105,9 +100,12 @@ class DataCollatorSpeechSeq2SeqWithPadding:
             labels = labels[:, 1:]
 
         batch["labels"] = labels
+        batch["num_errores"] = num_vacios # Pasamos el chivato a la GPU
+        
         return batch
+
 # ==========================================
-# DATAMODULE (PYTORCH LIGHTNING)
+# DATAMODULE 
 # ==========================================
 class WhisperDataModule(pl.LightningDataModule):
     def __init__(self, data_dir, model_path, batch_size=8, num_workers=8):
@@ -123,6 +121,7 @@ class WhisperDataModule(pl.LightningDataModule):
         self.processor = WhisperProcessor.from_pretrained(self.model_path, local_files_only=True)
         self.processor.tokenizer.set_prefix_tokens(language="basque", task="transcribe")
         self.dataset = load_from_disk(self.data_dir).with_format("torch").cast_column("audio", Audio(decode=False))
+        print(" [SETUP] Dataset cargado en memoria correctamente.")
 
     def train_dataloader(self):
         collator = DataCollatorSpeechSeq2SeqWithPadding(processor=self.processor)
@@ -135,47 +134,59 @@ class WhisperDataModule(pl.LightningDataModule):
                           shuffle=False, collate_fn=collator, num_workers=self.num_workers, pin_memory=True)
 
 # ==========================================
-# LIGHTNING MODEL MODULE
+# LIGHTNING MODEL MODULE (LLENO DE PRINTS)
 # ==========================================
 class WhisperLightning(pl.LightningModule):
     def __init__(self, model_path, learning_rate, weight_decay, warmup_steps, max_steps):
         super().__init__()
         self.save_hyperparameters()
         self.model = WhisperForConditionalGeneration.from_pretrained(model_path, local_files_only=True)
-        
-        # ESCUDO MATEMATICO Congelamos el encoder para evitar Gradient Explosion
-        #self.model.model.encoder.requires_grad_(False)
-        
         self.processor = WhisperProcessor.from_pretrained(model_path, local_files_only=True)
         
-        # Forzar Euskera
         self.model.generation_config.forced_decoder_ids = self.processor.get_decoder_prompt_ids(language="basque", task="transcribe")
         self.model.generation_config.suppress_tokens = []
+        
+        # Descongelado por si acaso
+        # self.model.model.encoder.requires_grad_(False)
+
     def forward(self, input_features, labels):
         return self.model(input_features=input_features, labels=labels)
 
     def training_step(self, batch, batch_idx):
-        # 1. Limpieza extrema de tensores de audio por si cuela algun infinito
-        input_features = torch.nan_to_num(batch["input_features"], nan=0.0, posinf=0.0, neginf=0.0)
+        # SOLO LA GPU MAESTRA IMPRIME PARA NO VOLVERNOS LOCOS
+        is_master = self.global_rank == 0
+        
+        input_features = batch["input_features"]
         labels = batch["labels"]
+        errores_collator = batch.get("num_errores", 0)
 
-        # 2. ESCUDO 1: Si TODAS las etiquetas son -100 (texto vacio) da division por cero.
+        # 1. Comprobacion de Tensores Puros
+        if is_master and batch_idx % 20 == 0:
+            print(f"\n--- DEBUG STEP {batch_idx} ---")
+            print(f" [GPU 0] Errores lectura DataCollator: {errores_collator}")
+            print(f" [GPU 0] Input Features Max: {input_features.max().item():.4f}, Min: {input_features.min().item():.4f}")
+            print(f" [GPU 0] Numero total de etiquetas en el batch: {labels.numel()}")
+            print(f" [GPU 0] Etiquetas a -100 (vacias): {(labels == -100).sum().item()}")
+
+        # 2. Escudo contra Division por cero total
         if (labels == -100).all():
-            # Dummy loss: Multiplicamos los pesos por 0 para que de exactamente 0.0
-            # Esto permite hacer backward() y sincronizar las GPUs sin colgar el MareNostrum
-            dummy_loss = sum([p.sum() for p in self.parameters() if p.requires_grad]) * 0.0
-            return dummy_loss
+            if is_master: print(f" [ALERTA GPU 0] Batch {batch_idx} tiene TODAS las labels a -100. Retornando 0.0")
+            return sum([p.sum() for p in self.parameters() if p.requires_grad]) * 0.0
 
-        # 3. Forward pass normal
+        # 3. Forward real
         outputs = self(input_features=input_features, labels=labels)
         loss = outputs.loss
 
-        # 4. ESCUDO 2: Si la atencion matematica del Transformer explota y da NaN
-        if torch.isnan(loss) or torch.isinf(loss):
-            dummy_loss = sum([p.sum() for p in self.parameters() if p.requires_grad]) * 0.0
-            return dummy_loss
+        # 4. Impresion del Loss Crudo (Antes del promedio de Lightning)
+        if is_master and batch_idx % 20 == 0:
+            print(f" [GPU 0] Loss crudo de la red: {loss.item():.5f}")
 
-        # Solo logueamos la perdida si es un numero real sano
+        # 5. Escudo contra NaN/Infinito
+        if torch.isnan(loss) or torch.isinf(loss):
+            if is_master: print(f" [FATAL GPU 0] El Loss ha dado NaN/Infinito en el batch {batch_idx}.")
+            return sum([p.sum() for p in self.parameters() if p.requires_grad]) * 0.0
+
+        # 6. Log normal
         self.log("train_loss", loss, on_step=True, on_epoch=True, prog_bar=True, sync_dist=True)
         return loss
 
@@ -183,12 +194,10 @@ class WhisperLightning(pl.LightningModule):
         input_features = batch["input_features"]
         labels = batch["labels"]
 
-        # 1. Calculo de Loss
         outputs = self(input_features=input_features, labels=labels)
         val_loss = outputs.loss
         self.log("val_loss", val_loss, on_epoch=True, prog_bar=True, sync_dist=True)
 
-        # 2. Generacion de texto para metricas
         generated_ids = self.model.generate(
             input_features=input_features,
             max_new_tokens=225,
@@ -196,19 +205,14 @@ class WhisperLightning(pl.LightningModule):
             task="transcribe"
         )
 
-        # Decodificar predicciones
         decoded_preds = self.processor.batch_decode(generated_ids, skip_special_tokens=True)
-        
-        # Decodificar labels reales (reemplazando -100)
         labels = labels.clone()
         labels[labels == -100] = self.processor.tokenizer.pad_token_id
         decoded_labels = self.processor.batch_decode(labels, skip_special_tokens=True)
 
-        # Limpiar strings vacios para jiwer
         decoded_preds = [p if p.strip() else "EMPTY" for p in decoded_preds]
         decoded_labels = [l if l.strip() else "EMPTY" for l in decoded_labels]
 
-        # 3. Calculo de WER y CER
         wer = jiwer.wer(decoded_labels, decoded_preds)
         cer = jiwer.cer(decoded_labels, decoded_preds)
 
@@ -233,19 +237,18 @@ class WhisperLightning(pl.LightningModule):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--model_path", type=str, default="/gpfs/projects/ehpc485/tesi681824/transcriptor/modelo_whisper_large_v3")
-    parser.add_argument("--data_dir", type=str, required=True, help="Path to the dataset (will be passed as TMPDIR by SLURM)")
+    parser.add_argument("--data_dir", type=str, required=True, help="Path to the dataset")
     parser.add_argument("--batch_size", type=int, default=8)
-    parser.add_argument("--learning_rate", type=float, default=1e-5)
+    parser.add_argument("--learning_rate", type=float, default=5e-6)
     parser.add_argument("--weight_decay", type=float, default=0.01)
     parser.add_argument("--warmup_steps", type=int, default=500)
     parser.add_argument("--max_epochs", type=int, default=30)
     parser.add_argument("--max_steps", type=int, default=100000)
     parser.add_argument("--accumulate_grad_batches", type=int, default=1)
-    parser.add_argument("--num_nodes", type=int, default=2)
+    parser.add_argument("--num_nodes", type=int, default=1) # CAMBIADO A 1 POR DEFECTO AHORA
     parser.add_argument("--gpus_per_node", type=int, default=4)
     parser.add_argument("--num_workers", type=int, default=8)
     
-    # SCRATCH PATHS
     parser.add_argument("--output_dir", type=str, default="/gpfs/scratch/ehpc485/tesi681824/whisper_eu_out/checkpoints")
     parser.add_argument("--log_dir", type=str, default="/gpfs/scratch/ehpc485/tesi681824/whisper_eu_out/logs")
 
@@ -288,22 +291,19 @@ def main():
         devices=args.gpus_per_node,
         strategy=DDPStrategy(find_unused_parameters=False),
         accelerator="gpu",
-        precision="bf16-mixed", # Super-optimizacion para H100
+        precision="bf16-mixed", 
         max_epochs=args.max_epochs,
         max_steps=args.max_steps,
         accumulate_grad_batches=args.accumulate_grad_batches,
         gradient_clip_val=1.0,
         callbacks=[checkpoint_best, early_stopping, lr_monitor],
         logger=csv_logger,
-        val_check_interval=0.25, # Valida 4 veces por epoca
+        val_check_interval=0.25, 
         log_every_n_steps=10,
     )
 
     print("================================================================")
-    print(" INICIANDO ENTRENAMIENTO WHISPER - EUSKERA (OFFLINE)")
-    print(f" Nodos: {args.num_nodes} | GPUs por nodo: {args.gpus_per_node}")
-    print(f" Precision: bfloat16 mixed (Optimizado para H100)")
-    print(f" Checkpoints guardados en: {args.output_dir}")
+    print(" INICIANDO ENTRENAMIENTO DEBUG - WHISPER EUSKERA")
     print("================================================================")
 
     trainer.fit(model, datamodule=datamodule)
@@ -312,7 +312,7 @@ def main():
     final_path = os.path.join(args.output_dir, "whisper-euskera-final")
     model.model.save_pretrained(final_path)
     model.processor.save_pretrained(final_path)
-    print("Proceso terminado correctamente.")
+    print("Proceso terminado.")
 
 if __name__ == "__main__":
     main()
