@@ -36,8 +36,10 @@ async def ws_transcribe(websocket: WebSocket):
     # or from within the backend directory directly.
     try:
         from backend.server import state, load_audio_as_float32
+        from backend.logger import log_transcription
     except ModuleNotFoundError:
         from server import state, load_audio_as_float32  # type: ignore
+        from logger import log_transcription  # type: ignore
     import numpy as np
 
     await websocket.accept()
@@ -116,6 +118,17 @@ async def ws_transcribe(websocket: WebSocket):
                 text = result.get("text", "").strip()
                 if not text or len(text) < 2:
                     continue
+
+                # ── Log transcription metrics ──────────────────────────────
+                log_transcription(
+                    mode="realtime",
+                    device=state["device"],
+                    elapsed_s=elapsed,
+                    audio_samples=len(data),
+                    audio_bytes=len(audio_bytes),
+                    text=text,
+                    audio_level=level,
+                )
 
                 await websocket.send_text(json.dumps({
                     "type": "transcript",

@@ -1,0 +1,46 @@
+# ── .dockerignore (raíz del proyecto) ─────────────────────────────────────────
+# Usado cuando el contexto de build es la raíz del proyecto (imágenes bundled).
+# Evita enviar al Docker daemon cosas grandes innecesarias.
+
+# Modelos que NO queremos incluir (solo modelo_base_hf se incluye en bundled)
+modelo_exportado_hf/
+modelo_exportado_hf.zip
+whisper/
+whisper.cpp/
+checkpoints/
+
+# Experimentos, demos y notebooks
+experiments/
+demo/
+scripts/
+
+# App mobile
+app_mobile/
+
+# Python cache
+**/__pycache__/
+**/*.pyc
+**/*.pyo
+**/*.pyd
+**/.pytest_cache/
+**/*.egg-info/
+
+# Entornos virtuales
+.venv/
+venv/
+env/
+
+# Git y herramientas de desarrollo
+.git/
+.github/
+.gitignore
+.gemini/
+
+# Logs
+app/logs/
+**/logs/*.jsonl
+
+# Misc
+*.md
+*.zip
+*.bin          # pesos GGUF — solo queremos los .safetensors

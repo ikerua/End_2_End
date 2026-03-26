@@ -1,0 +1,107 @@
+# ── Whisper Eus — Docker Compose (raíz del proyecto) ─────────────────────────
+#
+#  Ejecutar SIEMPRE desde la raíz del proyecto:
+#    cd End_2_End/
+#    docker compose up whisper-cpu-slim
+#
+#  ┌───────────────────┬──────────┬────────────────────────────────────────────┐
+#  │ Servicio          │ Imagen   │ Descripción                                │
+#  ├───────────────────┼──────────┼────────────────────────────────────────────┤
+#  │ whisper-cpu-slim  │ ~1 GB    │ Modelo montado desde el host. CPU.        │
+#  │ whisper-gpu-slim  │ ~1 GB    │ Modelo montado desde el host. GPU NVIDIA. │
+#  │ whisper-cpu-bundled│ ~2 GB+  │ Modelo incluido en la imagen. CPU.        │
+#  │ whisper-gpu-bundled│ ~2 GB+  │ Modelo incluido en la imagen. GPU NVIDIA. │
+#  └───────────────────┴──────────┴────────────────────────────────────────────┘
+#
+#  Comparativa slim vs bundled:
+#    slim     → imagen ligera, requiere modelo en ./modelo_base_hf/
+#    bundled  → autocontenida, no necesita nada en el host
+#
+#  Requisitos GPU: NVIDIA drivers + nvidia-container-toolkit
+#    https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html
+
+services:
+
+  # ════════════════════════════════════════════════════════════════════════════
+  # SLIM — modelo montado como volumen desde el host
+  # Contexto: ./app  (el Dockerfile slim usa rutas relativas a app/)
+  # ════════════════════════════════════════════════════════════════════════════
+
+  whisper-cpu-slim:
+    build:
+      context: ./app
+      dockerfile: Dockerfile
+    image: whisper-eus-slim:latest
+    container_name: whisper-eus-cpu-slim
+    ports:
+      - "7860:7860"
+    volumes:
+      - ./modelo_base_hf:/app/modelo:ro    # modelo en el host
+      - ./app/logs:/app/logs               # logs persistentes
+    environment:
+      - MODEL_PATH=/app/modelo
+      - CUDA_VISIBLE_DEVICES=              # forzar CPU
+    restart: unless-stopped
+
+  whisper-gpu-slim:
+    build:
+      context: ./app
+      dockerfile: Dockerfile
+    image: whisper-eus-slim:latest
+    container_name: whisper-eus-gpu-slim
+    ports:
+      - "7860:7860"
+    volumes:
+      - ./modelo_base_hf:/app/modelo:ro
+      - ./app/logs:/app/logs
+    environment:
+      - MODEL_PATH=/app/modelo
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    restart: unless-stopped
+
+  # ════════════════════════════════════════════════════════════════════════════
+  # BUNDLED — modelo incluido dentro de la imagen
+  # Contexto: .  (raíz del proyecto, para poder copiar modelo_base_hf/)
+  # ════════════════════════════════════════════════════════════════════════════
+
+  whisper-cpu-bundled:
+    build:
+      context: .
+      dockerfile: app/Dockerfile.bundled
+    image: whisper-eus-bundled:latest
+    container_name: whisper-eus-cpu-bundled
+    ports:
+      - "7860:7860"
+    volumes:
+      - ./app/logs:/app/logs               # solo logs en el host
+    environment:
+      - MODEL_PATH=/app/modelo
+      - CUDA_VISIBLE_DEVICES=
+    restart: unless-stopped
+
+  whisper-gpu-bundled:
+    build:
+      context: .
+      dockerfile: app/Dockerfile.bundled
+    image: whisper-eus-bundled:latest
+    container_name: whisper-eus-gpu-bundled
+    ports:
+      - "7860:7860"
+    volumes:
+      - ./app/logs:/app/logs
+    environment:
+      - MODEL_PATH=/app/modelo
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    restart: unless-stopped

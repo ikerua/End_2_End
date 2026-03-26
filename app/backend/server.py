@@ -20,8 +20,10 @@ from fastapi.staticfiles import StaticFiles
 from transformers import pipeline
 try:
     from backend.server_realtime import realtime_router
+    from backend.logger import log_transcription
 except ModuleNotFoundError:
     from server_realtime import realtime_router  # type: ignore
+    from logger import log_transcription  # type: ignore
 
 
 # ── Configuration ──────────────────────────────────────────────────────────────
@@ -176,6 +178,17 @@ async def transcribe(
 
         if not text or len(text) < 2:
             return JSONResponse({"text": "", "warning": "No se detectó habla."})
+
+        # ── Log transcription metrics ──────────────────────────────────────
+        log_transcription(
+            mode="file",
+            device=state["device"],
+            elapsed_s=elapsed,
+            audio_samples=len(data),
+            audio_bytes=len(audio_bytes),
+            text=text,
+            audio_level=level,
+        )
 
         return JSONResponse({
             "text": text,

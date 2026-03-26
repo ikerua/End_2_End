@@ -1,48 +1,11 @@
-# ── Whisper Eus — Docker Compose ─────────────────────────────────────────────
-# Usage:
-#   CPU:  docker compose up whisper-cpu
-#   GPU:  docker compose up whisper-gpu  (requires nvidia-container-toolkit)
-
-services:
-
-  # ── CPU profile ────────────────────────────────────────────────────────────
-  whisper-cpu:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    image: whisper-eus:latest
-    container_name: whisper-eus-cpu
-    ports:
-      - "7860:7860"
-    volumes:
-      # Mount your trained model — no need to bake it into the image
-      - ../modelo_base_hf:/app/modelo:ro
-    environment:
-      - MODEL_PATH=/app/modelo
-      # Force CPU even if CUDA is available inside container
-      - CUDA_VISIBLE_DEVICES=""
-    restart: unless-stopped
-
-  # ── GPU profile ────────────────────────────────────────────────────────────
-  # Requirements: NVIDIA drivers + nvidia-container-toolkit installed on host
-  # Install: https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html
-  whisper-gpu:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    image: whisper-eus:latest
-    container_name: whisper-eus-gpu
-    ports:
-      - "7860:7860"
-    volumes:
-      - ../modelo_base_hf:/app/modelo:ro
-    environment:
-      - MODEL_PATH=/app/modelo
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: 1
-              capabilities: [gpu]
-    restart: unless-stopped
+# ⚠️  ESTE ARCHIVO YA NO ES EL PRINCIPAL
+#
+# El docker-compose principal está en la RAÍZ del proyecto:
+#   End_2_End/docker-compose.yml
+#
+# Ejecuta todos los comandos desde la raíz:
+#   cd End_2_End/
+#   docker compose up whisper-cpu-slim
+#   docker compose up whisper-gpu-slim
+#   docker compose up whisper-cpu-bundled
+#   docker compose up whisper-gpu-bundled

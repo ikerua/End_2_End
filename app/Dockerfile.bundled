@@ -1,0 +1,45 @@
+# ── Whisper Eus — Bundled Dockerfile ──────────────────────────────────────────
+# El modelo fine-tuned está INCLUIDO en la imagen.
+# El contexto de build debe ser la raíz del proyecto (un nivel arriba de /app).
+#
+# docker-compose lo gestiona automáticamente con:
+#   docker compose up whisper-cpu-bundled
+#   docker compose up whisper-gpu-bundled
+#
+# Build manual (desde la raíz del proyecto):
+#   docker build -f app/Dockerfile.bundled -t whisper-eus-bundled:latest .
+#
+# La imagen es ~500 MB mayor que la slim pero es completamente autocontenida:
+# no necesita volúmenes ni acceso al host para el modelo.
+
+FROM python:3.12-slim
+
+# Sistema: ffmpeg para decodificación de audio
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ffmpeg \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Dependencias Python (capas cacheadas)
+COPY app/backend/requirements.txt ./requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Backend y frontend
+COPY app/backend/ ./backend/
+COPY app/frontend/ ./frontend/
+
+# ── Modelo incluido en la imagen ───────────────────────────────────────────────
+# Se copia desde modelo_base_hf/ en la raíz del proyecto
+COPY modelo_base_hf/ ./modelo/
+
+# Variable de entorno: ruta del modelo dentro del contenedor
+ENV MODEL_PATH=/app/modelo
+
+EXPOSE 7860
+
+HEALTHCHECK --interval=15s --timeout=5s --start-period=60s --retries=5 \
+  CMD curl -f http://localhost:7860/status || exit 1
+
+CMD ["python", "-m", "uvicorn", "backend.server:app", "--host", "0.0.0.0", "--port", "7860", "--workers", "1"]

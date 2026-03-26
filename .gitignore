@@ -189,3 +189,5 @@ modelo_exportado_hf/
 *app_mobile/
 whisper/
 whisper.cpp/
+Final_Submission/
+*.jsonl
