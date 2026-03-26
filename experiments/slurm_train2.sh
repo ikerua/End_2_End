@@ -6,9 +6,9 @@
 #SBATCH --partition=acc
 #SBATCH --qos=acc_ehpc
 #SBATCH --nodes=1
-#SBATCH --ntasks-per-node=1
+#SBATCH --ntasks-per-node=4
 #SBATCH --cpus-per-task=20
-#SBATCH --gres=gpu:1
+#SBATCH --gres=gpu:4
 #SBATCH --time=48:00:00
 
 # 1. Carga de modulos
@@ -48,12 +48,12 @@ echo "Copia finalizada."
 cd $DIR_PROYECTO
 
 echo "Lanzando PyTorch Lightning..."
-srun python -u train.py \
+srun python -u train3_whisperbase.py \
     --data_dir $DEST_DATA \
     --num_nodes 1 \
-    --gpus_per_node 1 \
-    --batch_size 8 \
-    --accumulate_grad_batches 2 \
+    --gpus_per_node 4 \
+    --batch_size 4 \
+    --accumulate_grad_batches 16 \
     --learning_rate 1e-5
 
 echo "----------------------------------------------------------------"

@@ -1,7 +1,7 @@
 #!/bin/bash
-#SBATCH --job-name=W_L_EUS_1N
-#SBATCH --output=train_whisper_%j.out
-#SBATCH --error=train_whisper_%j.err
+#SBATCH --job-name=EVAL_WHISPER
+#SBATCH --output=eval_modelos_%j.out
+#SBATCH --error=eval_modelos_%j.err
 #SBATCH --account=ehpc485
 #SBATCH --partition=acc
 #SBATCH --qos=acc_ehpc
@@ -18,6 +18,7 @@ module load mkl
 module load impi
 module load hdf5
 module load python/3.12.1
+module load nasm
 module load ffmpeg/7.1_dynamic
 
 # 2. Entorno y PYTHONPATH
@@ -25,38 +26,22 @@ unset PYTHONPATH
 export PYTHONPATH="/gpfs/projects/ehpc485/tesi681824/transcriptor/venv_transcriptor/lib/python3.12/site-packages"
 source /gpfs/projects/ehpc485/tesi681824/transcriptor/venv_transcriptor/bin/activate
 
-# 3. Candados Offline
+# 3. Restricciones de red
 export HF_DATASETS_OFFLINE=1
 export TRANSFORMERS_OFFLINE=1
-export WANDB_DISABLED=true
 
 echo "----------------------------------------------------------------"
-echo "INICIO TRABAJO SLURM: WHISPER 1 NODO (4 GPUs)"
+echo "INICIO TRABAJO SLURM: EVALUACION COMPARATIVA DE 5 MODELOS"
 date
 echo "----------------------------------------------------------------"
 
-# 4. Estrategia de Disco Local (SSD TMPDIR)
 DIR_PROYECTO="/gpfs/projects/ehpc485/tesi681824/transcriptor"
-ORIGIN_DATA="$DIR_PROYECTO/dataset_unificado"
-DEST_DATA="$TMPDIR/dataset_unificado"
-
-echo "Copiando dataset unificado al SSD del nodo ($TMPDIR)..."
-cp -r $ORIGIN_DATA $TMPDIR/
-echo "Copia finalizada."
-
-# 5. Ejecutar Entrenamiento
 cd $DIR_PROYECTO
 
-echo "Lanzando PyTorch Lightning..."
-srun python -u train.py \
-    --data_dir $DEST_DATA \
-    --num_nodes 1 \
-    --gpus_per_node 1 \
-    --batch_size 8 \
-    --accumulate_grad_batches 2 \
-    --learning_rate 1e-5
+# Lanzar evaluacion
+srun python -u test.py
 
 echo "----------------------------------------------------------------"
-echo "ENTRENAMIENTO FINALIZADO"
+echo "EVALUACION FINALIZADA"
 date
 echo "----------------------------------------------------------------"
