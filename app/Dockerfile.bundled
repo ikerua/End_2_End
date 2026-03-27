@@ -31,8 +31,9 @@ COPY app/backend/ ./backend/
 COPY app/frontend/ ./frontend/
 
 # ── Modelo incluido en la imagen ───────────────────────────────────────────────
-# Se copia desde models/base_hf/ en la raíz del proyecto
-COPY models/base_hf/ ./modelo/
+# Se descarga desde Hugging Face usando el script de Python o CLI
+RUN pip install "huggingface_hub[cli]" && \
+    python -c "from huggingface_hub import snapshot_download; snapshot_download(repo_id='ikerua/whisper-base-eus', local_dir='./modelo', local_dir_use_symlinks=False)"
 
 # Variable de entorno: ruta del modelo dentro del contenedor
 ENV MODEL_PATH=/app/modelo

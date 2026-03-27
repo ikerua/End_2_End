@@ -53,10 +53,12 @@ async def lifespan(app: FastAPI):
 
     t0 = time.time()
     try:
-        if not Path(MODEL_PATH).exists():
+        # Comprobamos si es una ruta local del contenedor
+        # Si no existe y tiene formato de repo de Hugging Face (ej. "ikerua/whisper-base-eus") lo dejamos pasar
+        if not Path(MODEL_PATH).exists() and not (MODEL_PATH.startswith("ikerua/") or ("/" in MODEL_PATH and not MODEL_PATH.startswith("/"))):
             raise FileNotFoundError(
-                f"Modelo no encontrado en '{MODEL_PATH}'. "
-                "Asegúrate de que el volumen está montado correctamente."
+                f"Modelo no encontrado en '{MODEL_PATH}' y no parece un ID de Hugging Face. "
+                "Asegúrate de que el volumen está montado o proporciona un ID válido."
             )
 
         state["pipeline"] = pipeline(
